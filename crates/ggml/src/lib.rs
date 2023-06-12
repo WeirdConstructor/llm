@@ -378,6 +378,12 @@ pub fn cpu_has_gpublas() -> bool {
     unsafe { sys::ggml_cpu_has_gpublas() != 0 }
 }
 
+/// Loads opencl stuff...
+pub fn load_gpu_file(tensor: &Tensor, filename: &str, offset: usize) {
+    let c_filename = std::ffi::CString::new(filename).unwrap();
+    unsafe { sys::opencl::ggml_cl_load_data(c_filename.as_ptr(), tensor.ptr.as_ptr(), offset) }
+}
+
 /// Sets the name of a tensor.
 pub fn set_name(tensor: &Tensor, name: &str) {
     let c_name = std::ffi::CString::new(name).unwrap();

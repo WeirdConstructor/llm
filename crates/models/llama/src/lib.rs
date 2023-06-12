@@ -58,16 +58,16 @@ impl KnownModel for Llama {
 
         let mut layers = Vec::new();
         for i in 0..hyperparameters.n_layer {
-            let layer = Layer {
-                attention_norm: tl.load(&format!("layers.{i}.attention_norm.weight"))?,
-                wq: tl.load(&format!("layers.{i}.attention.wq.weight"))?,
-                wk: tl.load(&format!("layers.{i}.attention.wk.weight"))?,
-                wv: tl.load(&format!("layers.{i}.attention.wv.weight"))?,
-                wo: tl.load(&format!("layers.{i}.attention.wo.weight"))?,
-                ffn_norm: tl.load(&format!("layers.{i}.ffn_norm.weight"))?,
-                w1: tl.load(&format!("layers.{i}.feed_forward.w1.weight"))?,
-                w2: tl.load(&format!("layers.{i}.feed_forward.w2.weight"))?,
-                w3: tl.load(&format!("layers.{i}.feed_forward.w3.weight"))?,
+            let mut layer = Layer {
+                attention_norm: tl.load_gpu(&format!("layers.{i}.attention_norm.weight"), true)?,
+                wq: tl.load_gpu(&format!("layers.{i}.attention.wq.weight"), true)?,
+                wk: tl.load_gpu(&format!("layers.{i}.attention.wk.weight"), true)?,
+                wv: tl.load_gpu(&format!("layers.{i}.attention.wv.weight"), true)?,
+                wo: tl.load_gpu(&format!("layers.{i}.attention.wo.weight"), true)?,
+                ffn_norm: tl.load_gpu(&format!("layers.{i}.ffn_norm.weight"), true)?,
+                w1: tl.load_gpu(&format!("layers.{i}.feed_forward.w1.weight"), true)?,
+                w2: tl.load_gpu(&format!("layers.{i}.feed_forward.w2.weight"), true)?,
+                w3: tl.load_gpu(&format!("layers.{i}.feed_forward.w3.weight"), true)?,
             };
 
             layers.push(layer);

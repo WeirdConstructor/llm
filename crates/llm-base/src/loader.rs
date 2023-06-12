@@ -340,7 +340,11 @@ impl LoadError {
 /// Used by models to fetch tensors from a loader.
 pub trait TensorLoader<E: std::error::Error> {
     /// Gets a tensor from the loader.
-    fn load(&mut self, name: &str) -> Result<ggml::Tensor, E>;
+    fn load(&mut self, name: &str) -> Result<ggml::Tensor, E> {
+        self.load_gpu(name, false)
+    }
+    /// Loool
+    fn load_gpu(&mut self, name: &str, gpu: bool) -> Result<ggml::Tensor, E>;
     /// Finish loading the model, and extract all of the state from the loader.
     fn finish(self) -> (Context, HashMap<String, ggml::Tensor>, Option<Mmap>);
 }
@@ -584,7 +588,7 @@ struct MmapCompatibleLoader<'a> {
     loaded_tensors: HashMap<String, ggml::Tensor>,
 }
 impl TensorLoader<LoadError> for MmapCompatibleLoader<'_> {
-    fn load(&mut self, name: &str) -> Result<ggml::Tensor, LoadError> {
+    fn load_gpu(&mut self, name: &str, gpu: bool) -> Result<ggml::Tensor, LoadError> {
         let info = self.tensors.get(name).ok_or(LoadError::UnknownTensor {
             tensor_name: String::from(name),
             path: Default::default(),
@@ -597,7 +601,7 @@ impl TensorLoader<LoadError> for MmapCompatibleLoader<'_> {
             self.mmap.as_ref(),
         );
 
-        let mut tensor = main_context.get_tensor(info)?;
+        let mut tensor = main_context.get_tensor(info, gpu)?;
 
         if let Some(lora_adapters) = &mut self.lora_adapters {
             for lora_adapter in lora_adapters {
@@ -644,7 +648,7 @@ impl<'a> FileContext<'a> {
         }
     }
 
-    pub(crate) fn get_tensor(&mut self, info: &TensorLoadInfo) -> Result<ggml::Tensor, LoadError> {
+    pub(crate) fn get_tensor(&mut self, info: &TensorLoadInfo, gpu: bool) -> Result<ggml::Tensor, LoadError> {
         let name = &info.name;
         let ne = info.dims();
         let dims = ne.len();
@@ -674,6 +678,15 @@ impl<'a> FileContext<'a> {
                 })
             }
         };
+
+        if gpu {
+            unsafe {
+                tensor.set_backend_gpu();
+                println!("{} load file... {}", name, self.path.to_owned().to_str().unwrap());
+                ggml::load_gpu_file(&tensor, self.path.to_owned().to_str().unwrap(), info.start_offset as usize);
+            }
+            return Ok(tensor);
+        }
 
         match self.mmap {
             Some(mmap) => unsafe {

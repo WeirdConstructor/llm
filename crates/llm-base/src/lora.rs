@@ -108,8 +108,8 @@ impl LoraAdapter {
         let mut patch_file = FileContext::new(&patch_context, &mut self.file, &self.path, None);
 
         // Load the A and B tensors
-        let a = patch_file.get_tensor(&a_info)?;
-        let b = patch_file.get_tensor(&b_info)?;
+        let a = patch_file.get_tensor(&a_info, false)?;
+        let b = patch_file.get_tensor(&b_info, false)?;
 
         // Build a ggml context and apply the patch
         // TODO: maybe pass the model's thread count to this context

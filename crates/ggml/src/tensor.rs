@@ -72,6 +72,16 @@ impl Tensor {
         })
     }
 
+    /// Hackjob!
+    pub unsafe fn set_backend_gpu(&mut self) {
+        self.with_alive_ctx(|| unsafe { *self.ptr.as_ptr() }.backend = sys::ggml_backend_GGML_BACKEND_GPU);
+    }
+
+    /// Hackjob!
+    pub unsafe fn set_backend_gpu_split(&mut self) {
+        self.with_alive_ctx(|| unsafe { *self.ptr.as_ptr() }.backend = sys::ggml_backend_GGML_BACKEND_GPU_SPLIT);
+    }
+
     /// Number of elements in this tensor.
     pub fn nelements(&self) -> usize {
         self.with_alive_ctx(|| {
