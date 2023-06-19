@@ -9,6 +9,133 @@ use rand::{distributions::WeightedIndex, prelude::Distribution};
 
 use crate::{TokenBias, TokenId};
 
+#[derive(Debug, Clone, Copy)]
+struct Sample {
+    token: TokenId,
+    logit: f32,
+    p: f32,
+}
+
+#[derive(Debug, Clone)]
+struct Samples {
+    candidates: Vec<Sample>,
+}
+
+impl Samples {
+    pub fn apply_bias(&mut self, bias: &TokenBias) {
+        for sample in self.candidates.iter_mut() {
+            if let Some(new_logit) = bias.get(sample.token) {
+                sample.logit = new_logit;
+            }
+        }
+    }
+
+    pub fn apply_repetition_penalty(
+        &mut self,
+        previous_tokens: &[TokenId],
+        repeat_penalty: f32,
+        repetition_penalty_last_n: usize,
+    ) {
+        for sample in self.candidates.iter_mut() {
+            if previous_tokens[previous_tokens
+                .len()
+                .saturating_sub(repetition_penalty_last_n)..]
+                .contains(&sample.token)
+            {
+                // repetition penalty from CTRL paper (https://arxiv.org/abs/1909.05858)
+                // credit https://github.com/facebookresearch/llama/compare/main...shawwn:llama:main
+
+                // if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
+                if sample.logit < 0.0 {
+                    sample.logit *= repeat_penalty
+                } else {
+                    sample.logit /= repeat_penalty
+                }
+            };
+        }
+    }
+
+    pub fn from_logits_with_temperature(logits: &[f32], temperature: f32) -> Self {
+        let candidates = logits
+            .iter()
+            .enumerate()
+            .map(|(token_index, logit)| Sample {
+                token: token_index as TokenId,
+                logit: *logit * temperature,
+                p: 0.0,
+            })
+            .collect();
+
+        Self { candidates }
+    }
+
+    pub fn softmax(&mut self) {
+        let maxl = self
+            .candidates
+            .iter()
+            .map(|x| x.logit)
+            .max_by(f32::total_cmp)
+            .unwrap();
+
+        let mut sum = 0.0;
+        for sample in self.candidates.iter_mut() {
+            sample.p = (sample.logit - maxl).exp();
+            sum += sample.p;
+        }
+
+        for sample in self.candidates.iter_mut() {
+            sample.p /= sum;
+        }
+    }
+
+    pub fn sort(&mut self) {
+        self.candidates.sort_by(|a, b| {
+            // Sort descending
+            b.logit.total_cmp(&a.logit)
+        });
+    }
+
+    pub fn sample_top_k(&mut self, top_k: usize) {
+        if top_k >= self.candidates.len() {
+            self.sort();
+            return;
+        }
+
+        self.candidates.partial_sort(top_k, |a, b| {
+            // Sort descending
+            b.logit.total_cmp(&a.logit)
+        });
+
+        self.candidates.truncate(top_k);
+    }
+
+    pub fn sample_top_p(&mut self, top_p: f32) {
+        if top_p >= 1.0 {
+            return;
+        }
+
+        let mut cumsum = 0.0;
+        let mut top_idx = None;
+        for (i, sample) in self.candidates.iter().enumerate() {
+            cumsum += sample.p;
+
+            if cumsum >= top_p {
+                top_idx = Some(i);
+                break;
+            }
+        }
+
+        if let Some(top_idx) = top_idx {
+            self.candidates.truncate(top_idx + 1);
+        }
+
+        let inverse_cumsum = 1.0 / cumsum;
+        for sample in self.candidates.iter_mut() {
+            sample.p *= inverse_cumsum;
+        }
+    }
+}
+
 /// A sampler for generation.
 pub trait Sampler: Debug + Send + Sync {
     /// Given the previous tokens, the logits from the most recent evaluation, and a source of randomness,
